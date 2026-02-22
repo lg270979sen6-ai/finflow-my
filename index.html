@@ -340,21 +340,60 @@ input,textarea,select{-webkit-user-select:text;user-select:text;}
 </head>
 <body ontouchstart="">
 <!-- PASSWORD SCREEN -->
-<div class="lock-screen" id="lockScreen">
-  <div class="lock-logo"><div class="lock-logo-dot"></div>FinFlow</div>
-  <div class="lock-subtitle">Семейный бюджет</div>
-  <div class="lock-box">
-    <div class="lock-title">🔒 Введите пароль</div>
-    <div class="lock-hint">Доступ только для членов семьи</div>
-    <input class="lock-input" id="lockInput" type="password" placeholder="••••" maxlength="20"
-      onkeydown="if(event.key==='Enter')checkPassword()"
-      oninput="document.getElementById('lockInput').classList.remove('error');document.getElementById('lockError').textContent=''">
-    <button class="lock-btn" onclick="checkPassword()">Войти</button>
-    <div class="lock-error" id="lockError"></div>
-    <div class="lock-change" onclick="showChangePassword()">Изменить пароль</div>
+<div id="lockScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0d0f14;flex-direction:column;align-items:center;justify-content:center;padding:32px;overflow:hidden;">
+
+  <!-- Ambient glow background -->
+  <div style="position:absolute;top:-20%;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(ellipse,rgba(108,141,250,0.12) 0%,transparent 70%);pointer-events:none;animation:glowPulse 4s ease-in-out infinite;"></div>
+  <div style="position:absolute;bottom:-10%;right:-10%;width:400px;height:400px;background:radial-gradient(ellipse,rgba(255,135,178,0.07) 0%,transparent 70%);pointer-events:none;animation:glowPulse 6s ease-in-out infinite reverse;"></div>
+
+  <!-- Logo -->
+  <div id="lockLogo" style="display:flex;flex-direction:column;align-items:center;margin-bottom:48px;animation:logoIn .8s cubic-bezier(.16,1,.3,1) both;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:#6c8dfa;animation:dotPulse 2s ease-in-out infinite;box-shadow:0 0 16px rgba(108,141,250,0.8);"></div>
+      <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:38px;letter-spacing:-1px;color:#ffffff;">FinFlow</span>
+    </div>
+    <span style="font-size:13px;color:#5a6478;letter-spacing:.12em;text-transform:uppercase;font-weight:500;">Семейный бюджет</span>
   </div>
+
+  <!-- Password form -->
+  <div id="lockForm" style="width:100%;max-width:320px;animation:formIn .9s cubic-bezier(.16,1,.3,1) .15s both;">
+    <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#fff;text-align:center;margin-bottom:6px;">Введите пароль</div>
+    <div style="font-size:12px;color:#5a6478;text-align:center;margin-bottom:22px;">Доступ только для членов семьи</div>
+
+    <!-- PIN dots display -->
+    <div id="pinDots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px;min-height:22px;"></div>
+
+    <!-- Hidden real input for keyboard on mobile -->
+    <input id="lockInput" type="password" inputmode="numeric" maxlength="20"
+      style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;"
+      onkeydown="if(event.key==='Enter')checkPassword()"
+      oninput="updatePinDots(this.value)">
+
+    <!-- Visible tap area to trigger keyboard -->
+    <div onclick="document.getElementById('lockInput').focus()" 
+      style="width:100%;padding:16px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;font-size:13px;color:#5a6478;margin-bottom:14px;cursor:pointer;transition:border-color .2s;"
+      id="lockTapArea">Нажмите и введите пароль</div>
+
+    <button onclick="checkPassword()"
+      style="width:100%;padding:15px;border-radius:14px;background:#6c8dfa;color:white;border:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;box-shadow:0 6px 24px rgba(108,141,250,0.35);"
+      onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(.97)'" ontouchend="this.style.transform=''">
+      Войти →
+    </button>
+
+    <div id="lockError" style="font-size:12px;color:#ff6b6b;text-align:center;margin-top:12px;min-height:18px;"></div>
+    <div onclick="showChangePassword()" style="font-size:11px;color:#3a4052;text-align:center;margin-top:18px;cursor:pointer;transition:color .15s;" onmouseover="this.style.color='#6c8dfa'" onmouseout="this.style.color='#3a4052'">Изменить пароль</div>
+  </div>
+
 </div>
 
+<style>
+@keyframes logoIn   {from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:none}}
+@keyframes formIn   {from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none}}
+@keyframes glowPulse{0%,100%{opacity:.7;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.08)}}
+@keyframes dotPulse {0%,100%{box-shadow:0 0 10px rgba(108,141,250,.6)}50%{box-shadow:0 0 24px rgba(108,141,250,1)}}
+@keyframes pinBounce{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes lockShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+</style>
 
 
 <!-- DESKTOP SIDEBAR -->
@@ -1633,20 +1672,45 @@ function checkPassword(){
   const input = document.getElementById('lockInput');
   const val = input.value;
   if(!val){ 
-    input.classList.add('error');
     document.getElementById('lockError').textContent = 'Введите пароль';
     return;
   }
   if(val === getPassword()){
-    // Save session (valid for 24h)
     store.set('ff_session', Date.now().toString());
-    document.getElementById('lockScreen').style.display = 'none';
+    // Fade out lock screen
+    const ls = document.getElementById('lockScreen');
+    ls.style.transition = 'opacity .4s';
+    ls.style.opacity = '0';
+    setTimeout(()=>{ ls.style.display='none'; ls.style.opacity=''; ls.style.transition=''; }, 400);
   } else {
     input.value = '';
-    input.classList.add('error');
+    updatePinDots('');
     document.getElementById('lockError').textContent = '❌ Неверный пароль';
-    setTimeout(()=>input.classList.remove('error'), 400);
+    // Shake animation
+    const form = document.getElementById('lockForm');
+    form.style.animation = 'lockShake .35s ease';
+    setTimeout(()=>{ form.style.animation=''; }, 400);
+    // Clear error after 2s
+    setTimeout(()=>{ document.getElementById('lockError').textContent=''; }, 2000);
   }
+}
+
+function updatePinDots(val){
+  const dots = document.getElementById('pinDots');
+  const tap = document.getElementById('lockTapArea');
+  if(!dots) return;
+  const len = val.length;
+  if(len === 0){
+    dots.innerHTML = '';
+    if(tap) tap.style.display = 'block';
+    return;
+  }
+  if(tap) tap.style.display = 'none';
+  dots.innerHTML = Array.from({length: len}).map((_,i) => 
+    `<div style="width:12px;height:12px;border-radius:50%;background:#6c8dfa;animation:pinBounce .25s ease ${i===len-1?'0s':'none'} both;box-shadow:0 0 8px rgba(108,141,250,.5)"></div>`
+  ).join('');
+  // Auto-submit if long enough (e.g. 4+ chars and user seems done)
+  document.getElementById('lockError').textContent = '';
 }
 
 function showChangePassword(){
@@ -1669,19 +1733,29 @@ function checkSession(){
       return true;
     }
   }
-  // Show lock screen
-  document.getElementById('lockScreen').style.display = 'flex';
-  setTimeout(()=>document.getElementById('lockInput').focus(), 100);
+  // Show lock screen with flex
+  const ls = document.getElementById('lockScreen');
+  ls.style.display = 'flex';
+  // Auto-focus after animation
+  setTimeout(()=>{ 
+    try{ document.getElementById('lockInput').focus(); } catch(e){}
+  }, 600);
   return false;
 }
 
 // Also add "Lock" button in settings
 function lockApp(){
   store.set('ff_session', '0');
-  document.getElementById('lockScreen').style.display = 'flex';
-  document.getElementById('lockInput').value = '';
+  const ls = document.getElementById('lockScreen');
+  const input = document.getElementById('lockInput');
+  input.value = '';
+  updatePinDots('');
   document.getElementById('lockError').textContent = '';
-  setTimeout(()=>document.getElementById('lockInput').focus(), 100);
+  document.getElementById('lockTapArea').style.display = 'block';
+  ls.style.opacity = '0';
+  ls.style.display = 'flex';
+  requestAnimationFrame(()=>{ ls.style.transition='opacity .3s'; ls.style.opacity='1'; });
+  setTimeout(()=>{ ls.style.transition=''; try{input.focus();}catch(e){} }, 350);
 }
 
 // iOS: ensure all onclick divs have role=button for touch activation
