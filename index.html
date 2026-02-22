@@ -340,7 +340,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text;}
 </head>
 <body ontouchstart="">
 <!-- PASSWORD SCREEN -->
-<div id="lockScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0d0f14;flex-direction:column;align-items:center;justify-content:center;padding:32px;overflow:hidden;">
+<div id="lockScreen" style="display:flex;position:fixed;inset:0;z-index:9999;background:#0d0f14;flex-direction:column;align-items:center;justify-content:center;padding:32px;overflow:hidden;">
 
   <!-- Ambient glow background -->
   <div style="position:absolute;top:-20%;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(ellipse,rgba(108,141,250,0.12) 0%,transparent 70%);pointer-events:none;animation:glowPulse 4s ease-in-out infinite;"></div>
@@ -1724,22 +1724,28 @@ function showChangePassword(){
   alert('✅ Пароль изменён!');
 }
 
+const APP_VERSION = 'v3'; // bump this to force re-login on all devices
+
 function checkSession(){
+  // Invalidate session if app version changed
+  if(store.get('ff_sess_ver') !== APP_VERSION){
+    store.set('ff_session', '0');
+    store.set('ff_sess_ver', APP_VERSION);
+  }
   const sess = store.get('ff_session');
-  if(sess){
+  const ls = document.getElementById('lockScreen');
+  if(sess && sess !== '0'){
     const age = Date.now() - parseInt(sess);
     if(age < 24 * 60 * 60 * 1000){ // 24 hours
-      document.getElementById('lockScreen').style.display = 'none';
+      if(ls) ls.style.display = 'none';
       return true;
     }
   }
-  // Show lock screen with flex
-  const ls = document.getElementById('lockScreen');
-  ls.style.display = 'flex';
-  // Auto-focus after animation
+  // Show lock screen
+  if(ls) ls.style.display = 'flex';
   setTimeout(()=>{ 
     try{ document.getElementById('lockInput').focus(); } catch(e){}
-  }, 600);
+  }, 700);
   return false;
 }
 
@@ -1757,6 +1763,10 @@ function lockApp(){
   requestAnimationFrame(()=>{ ls.style.transition='opacity .3s'; ls.style.opacity='1'; });
   setTimeout(()=>{ ls.style.transition=''; try{input.focus();}catch(e){} }, 350);
 }
+
+// Check password session before showing app
+document.addEventListener('DOMContentLoaded', function(){ checkSession(); });
+if(document.readyState !== 'loading') checkSession();
 
 // iOS: ensure all onclick divs have role=button for touch activation
 document.querySelectorAll('[onclick]').forEach(el=>{
