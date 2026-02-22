@@ -785,40 +785,83 @@ function initFirebase(url, room){
 
   setSyncStatus('syncing','Подключение...');
 
-  // Listen for changes
-  fbRef.on('value', (snap) => {
-    const data = snap.val();
-    if(data){
-      _receivingRemote = true; // prevent echo-loop
-      // Remote is source of truth — use it directly (not merge)
-      const remoteExps = data.expenses ? Object.values(data.expenses) : [];
-      const remoteBud  = data.budgets  || {};
-      const remoteCfg  = data.cfg      || {};
-
-      // Remote IS the source of truth — replace local completely
-      allExpenses = remoteExps;
-      if(Object.keys(remoteBud).length) budgets = remoteBud;
-      // Merge cfg (only user settings and cats from remote)
-      if(remoteCfg.users)      { cfg.users=remoteCfg.users; Object.entries(remoteCfg.users).forEach(([uid,d])=>{if(USERS[uid]){if(d.name)USERS[uid].name=d.name;if(d.color)USERS[uid].color=d.color;}}); }
-      if(remoteCfg.customCats) { cfg.customCats=remoteCfg.customCats; Object.entries(remoteCfg.customCats).forEach(([n,d])=>{if(!CATS[n])CATS[n]={...d,builtin:false};}); }
-      if(remoteCfg.catColors)  { cfg.catColors=remoteCfg.catColors; Object.keys(remoteCfg.catColors).forEach(c=>{if(CATS[c])CATS[c].color=remoteCfg.catColors[c];}); }
-      document.documentElement.style.setProperty('--u1',USERS.bogdan.color);
-      document.documentElement.style.setProperty('--u2',USERS.vika.color);
-
-      store.set('ff_exp', JSON.stringify(allExpenses));
-      store.set('ff_bud', JSON.stringify(budgets));
-      store.set('ff_cfg', JSON.stringify(cfg));
-      renderAll();
-      _receivingRemote = false; // done processing remote data
-    }
+  function onFbConnected(){
     fbConnected = true;
     setSyncStatus('online','Синхронизировано ✓');
     document.getElementById('fbStatus').className='firebase-status connected';
-    document.getElementById('fbStatus').innerHTML='<span>●</span>&nbsp;Подключено к ' + fbRoom;
+    document.getElementById('fbStatus').innerHTML='<span>●</span>&nbsp;Подключено · ' + fbRoom;
     document.getElementById('btnDisconnect').style.display='block';
-  }, (err)=>{
-    setSyncStatus('offline','Ошибка: ' + err.message);
-    showToast('❌ Firebase: ' + err.message);
+  }
+
+  // ── Listener 1: expenses (real-time, source of truth) ──
+  fbRef.child('expenses').on('value', snap => {
+    if(_receivingRemote) return;
+    _receivingRemote = true;
+    const data = snap.val();
+    allExpenses = data ? Object.values(data) : [];
+    store.set('ff_exp', JSON.stringify(allExpenses));
+    renderCalendar();
+    updateBadges();
+    if(currentView==='charts') renderCharts();
+    if(currentView==='plan')   renderPlan();
+    _receivingRemote = false;
+    onFbConnected();
+  }, err=>{ setSyncStatus('offline','Ошибка: '+err.message); });
+
+  // ── Listener 2: budgets ──
+  fbRef.child('budgets').on('value', snap => {
+    if(_receivingRemote) return;
+    const data = snap.val();
+    if(data && Object.keys(data).length){
+      budgets = data;
+      store.set('ff_bud', JSON.stringify(budgets));
+      if(currentView==='plan')   renderPlan();
+      if(currentView==='charts') renderCharts();
+    }
+  });
+
+  // ── Listener 3: cfg — categories, users, colors (real-time) ──
+  fbRef.child('cfg').on('value', snap => {
+    if(_receivingRemote) return;
+    _receivingRemote = true;
+    const remoteCfg = snap.val();
+    if(remoteCfg){
+      // Apply users
+      if(remoteCfg.users){
+        cfg.users = remoteCfg.users;
+        Object.entries(remoteCfg.users).forEach(([uid,d])=>{
+          if(USERS[uid]){ if(d.name)USERS[uid].name=d.name; if(d.color)USERS[uid].color=d.color; }
+        });
+        document.documentElement.style.setProperty('--u1',USERS.bogdan.color);
+        document.documentElement.style.setProperty('--u2',USERS.vika.color);
+        updateSidebarUsers();
+      }
+      // Apply custom categories
+      if(remoteCfg.customCats){
+        cfg.customCats = remoteCfg.customCats;
+        Object.entries(remoteCfg.customCats).forEach(([n,d])=>{
+          CATS[n] = {...d, builtin:false};
+        });
+        // Remove cats deleted on remote
+        Object.keys(CATS).forEach(n=>{
+          if(!CATS[n].builtin && !remoteCfg.customCats[n]) delete CATS[n];
+        });
+        buildSidebarCats();
+      }
+      // Apply cat colors
+      if(remoteCfg.catColors){
+        cfg.catColors = remoteCfg.catColors;
+        Object.keys(remoteCfg.catColors).forEach(c=>{ if(CATS[c]) CATS[c].color=remoteCfg.catColors[c]; });
+      }
+      // Apply currency & amount color
+      if(remoteCfg.currency)    { currency=remoteCfg.currency; cfg.currency=currency; }
+      if(remoteCfg.amountColor) { amountColor=remoteCfg.amountColor; cfg.amountColor=amountColor; document.documentElement.style.setProperty('--amount-color',amountColor); }
+      
+      store.set('ff_cfg', JSON.stringify(cfg));
+      renderCalendar();
+      if(currentView==='settings') renderSettingsUI();
+    }
+    _receivingRemote = false;
   });
 
   // Presence detection
@@ -847,12 +890,12 @@ function pushToFirebase(){
   if(!fbRef || !fbConnected) return;
   const expsObj = {};
   allExpenses.forEach(e => { expsObj[e.id.toString().replace(/\./g,'_')] = e; });
-  // Use set() for expenses so deletions propagate (update() only merges, never deletes)
+  // set() so deletions propagate (update() never deletes keys)
   fbRef.child('expenses').set(expsObj).catch(e=>{
     setSyncStatus('offline','Ошибка записи: ' + e.message);
   });
   fbRef.child('budgets').set(budgets);
-  fbRef.child('cfg').set({users:cfg.users||{}, customCats:cfg.customCats||{}, catColors:cfg.catColors||{}});
+  // cfg pushed separately by saveCfg() — don't double-push here
 }
 
 let _firstConnect = true;
@@ -915,7 +958,19 @@ setTimeout(()=>{
 let _receivingRemote = false; // flag to avoid echo-loop when receiving Firebase data
 function save()   { store.set('ff_exp', JSON.stringify(allExpenses)); if(fbConnected && !_receivingRemote) pushToFirebase(); }
 function saveBud(){ store.set('ff_bud', JSON.stringify(budgets)); if(fbConnected && !_receivingRemote) pushToFirebase(); }
-function saveCfg(){ store.set('ff_cfg', JSON.stringify(cfg)); }
+function saveCfg(){ 
+  store.set('ff_cfg', JSON.stringify(cfg)); 
+  // Push cfg to Firebase separately — doesn't trigger expense re-sync
+  if(fbRef && fbConnected && !_receivingRemote){
+    fbRef.child('cfg').set({
+      users:      cfg.users      || {},
+      customCats: cfg.customCats || {},
+      catColors:  cfg.catColors  || {},
+      currency:   cfg.currency   || currency,
+      amountColor:cfg.amountColor|| amountColor,
+    }).catch(e=>console.warn('cfg push failed:', e));
+  }
+}
 function fmt(n)   { return Number(n).toLocaleString('ru-RU') + '\u00A0' + currency; }
 
 function showToast(msg){
