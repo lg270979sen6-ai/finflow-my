@@ -339,6 +339,23 @@ input,textarea,select{-webkit-user-select:text;user-select:text;}
 </style>
 </head>
 <body ontouchstart="">
+<!-- PASSWORD SCREEN -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-logo"><div class="lock-logo-dot"></div>FinFlow</div>
+  <div class="lock-subtitle">Семейный бюджет</div>
+  <div class="lock-box">
+    <div class="lock-title">🔒 Введите пароль</div>
+    <div class="lock-hint">Доступ только для членов семьи</div>
+    <input class="lock-input" id="lockInput" type="password" placeholder="••••" maxlength="20"
+      onkeydown="if(event.key==='Enter')checkPassword()"
+      oninput="document.getElementById('lockInput').classList.remove('error');document.getElementById('lockError').textContent=''">
+    <button class="lock-btn" onclick="checkPassword()">Войти</button>
+    <div class="lock-error" id="lockError"></div>
+    <div class="lock-change" onclick="showChangePassword()">Изменить пароль</div>
+  </div>
+</div>
+
+
 
 <!-- DESKTOP SIDEBAR -->
 <div class="sidebar-desktop" id="sidebarDesktop" style="display:none">
@@ -559,6 +576,14 @@ input,textarea,select{-webkit-user-select:text;user-select:text;}
           <div class="settings-row">
             <div><div class="settings-row-label" style="color:var(--red)">Очистить всё</div><div class="settings-row-sub">Удалить все расходы</div></div>
             <button class="btn btn-danger" style="width:auto;padding:10px 16px;font-size:13px" onclick="clearAll()">🗑</button>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-label">🔒 Сменить пароль</div><div class="settings-row-sub">Текущий пароль по умолчанию: 1234</div></div>
+            <button class="btn btn-secondary" style="width:auto;padding:10px 16px;font-size:13px" onclick="showChangePassword()">Сменить</button>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-label">🚪 Заблокировать</div><div class="settings-row-sub">Выйти и показать экран пароля</div></div>
+            <button class="btn btn-secondary" style="width:auto;padding:10px 16px;font-size:13px" onclick="lockApp()">Блокировать</button>
           </div>
         </div>
       </div>
@@ -1595,6 +1620,70 @@ document.addEventListener('click',e=>{
 // ════════════════════════════════════════
 //  INIT — wrapped in try/catch for iOS safety
 // ════════════════════════════════════════
+// ════════════════════════════════════════
+//  PASSWORD PROTECTION
+// ════════════════════════════════════════
+const DEFAULT_PASSWORD = '1234'; // ← смените на свой пароль
+
+function getPassword(){
+  return store.get('ff_pass') || DEFAULT_PASSWORD;
+}
+
+function checkPassword(){
+  const input = document.getElementById('lockInput');
+  const val = input.value;
+  if(!val){ 
+    input.classList.add('error');
+    document.getElementById('lockError').textContent = 'Введите пароль';
+    return;
+  }
+  if(val === getPassword()){
+    // Save session (valid for 24h)
+    store.set('ff_session', Date.now().toString());
+    document.getElementById('lockScreen').style.display = 'none';
+  } else {
+    input.value = '';
+    input.classList.add('error');
+    document.getElementById('lockError').textContent = '❌ Неверный пароль';
+    setTimeout(()=>input.classList.remove('error'), 400);
+  }
+}
+
+function showChangePassword(){
+  const cur = prompt('Текущий пароль:');
+  if(cur !== getPassword()){ alert('Неверный пароль'); return; }
+  const np1 = prompt('Новый пароль:');
+  if(!np1 || np1.length < 3){ alert('Пароль должен быть не менее 3 символов'); return; }
+  const np2 = prompt('Повторите новый пароль:');
+  if(np1 !== np2){ alert('Пароли не совпадают'); return; }
+  store.set('ff_pass', np1);
+  alert('✅ Пароль изменён!');
+}
+
+function checkSession(){
+  const sess = store.get('ff_session');
+  if(sess){
+    const age = Date.now() - parseInt(sess);
+    if(age < 24 * 60 * 60 * 1000){ // 24 hours
+      document.getElementById('lockScreen').style.display = 'none';
+      return true;
+    }
+  }
+  // Show lock screen
+  document.getElementById('lockScreen').style.display = 'flex';
+  setTimeout(()=>document.getElementById('lockInput').focus(), 100);
+  return false;
+}
+
+// Also add "Lock" button in settings
+function lockApp(){
+  store.set('ff_session', '0');
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('lockInput').value = '';
+  document.getElementById('lockError').textContent = '';
+  setTimeout(()=>document.getElementById('lockInput').focus(), 100);
+}
+
 // iOS: ensure all onclick divs have role=button for touch activation
 document.querySelectorAll('[onclick]').forEach(el=>{
   if(el.tagName!=='BUTTON'&&el.tagName!=='A'&&el.tagName!=='INPUT'){
