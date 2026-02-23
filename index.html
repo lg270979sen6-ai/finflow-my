@@ -773,10 +773,11 @@ const EMOJI_LIST = ['🏠','🍔','🚗','🎬','💊','🧒','📦','🛒','�
 // ════════════════════════════════════════
 //  SAFE STORAGE (works on file://, blob:, mail attachments)
 // ════════════════════════════════════════
-const _mem = {}; // in-memory fallback
+const STORE_PREFIX = 'finflow_my:'; // ← unique per file
+const _mem = {};
 const store = {
-  get(k){ try{ const v=localStorage.getItem(k); return v; }catch(e){ return _mem[k]||null; } },
-  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} _mem[k]=v; },
+  get(k){ try{ return localStorage.getItem(STORE_PREFIX+k); }catch(e){ return _mem[k]||null; } },
+  set(k,v){ try{ localStorage.setItem(STORE_PREFIX+k,v); }catch(e){} _mem[k]=v; },
 };
 
 // ════════════════════════════════════════
