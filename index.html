@@ -363,16 +363,54 @@ input,textarea,select{-webkit-user-select:text;user-select:text;}
     <!-- PIN dots display -->
     <div id="pinDots" style="display:flex;justify-content:center;gap:14px;margin-bottom:28px;min-height:22px;"></div>
 
-    <!-- Hidden real input for keyboard on mobile -->
-    <input id="lockInput" type="password" inputmode="numeric" maxlength="20"
-      style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;"
-      onkeydown="if(event.key==='Enter')checkPassword()"
-      oninput="updatePinDots(this.value)">
+    <!-- Password input — visible on desktop, hidden on mobile (uses tap area + PIN dots) -->
+    <div style="position:relative;margin-bottom:14px;" id="lockInputWrap">
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="20"
+        onkeydown="if(event.key==='Enter')checkPassword()"
+        oninput="updatePinDots(this.value)"
+        placeholder="Введите пароль"
+        onfocus="this.parentElement.style.boxShadow='0 0 0 3px rgba(108,141,250,0.35)';this.style.borderColor='#6c8dfa';"
+        onblur="this.parentElement.style.boxShadow='none';this.style.borderColor='rgba(108,141,250,0.4)';"
+        style="width:100%;padding:16px 48px 16px 18px;
+               background:#1e2330;
+               border:2px solid rgba(108,141,250,0.4);
+               border-radius:14px;
+               color:#ffffff;
+               font-family:'DM Sans',sans-serif;
+               font-size:16px;
+               letter-spacing:4px;
+               outline:none;
+               transition:border-color .2s, box-shadow .2s;
+               -webkit-text-security:disc;">
+      <!-- Lock icon inside field -->
+      <span style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;opacity:0.5;">🔑</span>
+    </div>
 
-    <!-- Visible tap area to trigger keyboard -->
+    <!-- Tap area shown only on mobile (hides when typing) -->
     <div onclick="document.getElementById('lockInput').focus()" 
-      style="width:100%;padding:16px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;font-size:13px;color:#5a6478;margin-bottom:14px;cursor:pointer;transition:border-color .2s;"
-      id="lockTapArea">Нажмите и введите пароль</div>
+      style="display:none;width:100%;padding:16px;background:#1e2330;border:2px solid rgba(108,141,250,0.4);border-radius:14px;text-align:center;font-size:13px;color:#a0aabb;margin-bottom:14px;cursor:pointer;"
+      id="lockTapArea">👆 Нажмите и введите пароль</div>
+    
+    <script>
+    (function(){
+      var isMobile = ('ontouchstart' in window) && window.innerWidth < 768;
+      if(isMobile){
+        // Mobile: hide real input wrap, show tap area
+        document.getElementById('lockInputWrap').style.display = 'none';
+        document.getElementById('lockTapArea').style.display = 'block';
+        // Make actual input still receive keypresses (hidden)
+        var inp = document.getElementById('lockInput');
+        inp.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;';
+        document.getElementById('lockTapArea').parentElement.appendChild(inp);
+      } else {
+        // Desktop: focus input after animation
+        setTimeout(function(){ 
+          var el = document.getElementById('lockInput');
+          if(el) el.focus();
+        }, 800);
+      }
+    })();
+    </script>
 
     <button onclick="checkPassword()"
       style="width:100%;padding:15px;border-radius:14px;background:#6c8dfa;color:white;border:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;box-shadow:0 6px 24px rgba(108,141,250,0.35);"
